@@ -14,7 +14,7 @@ def translate_text(text):
     if not text.strip():
         return text
     try:
-        result = translator.translate(text, src='en', dest='zh-cn')
+        result = translator.translate(text, src='auto', dest='zh-cn')
         return result.text
     except Exception as e:
         print("翻译错误:", e)
