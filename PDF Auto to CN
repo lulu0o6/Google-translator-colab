@@ -1,0 +1,77 @@
+# 安装依赖
+!apt-get install -y libreoffice ocrmypdf tesseract-ocr tesseract-ocr-chi-sim > /dev/null
+!pip install deep-translator python-docx tqdm PyMuPDF -q
+
+from deep_translator import GoogleTranslator
+from docx import Document
+from docx.shared import Pt
+from google.colab import files
+from tqdm import tqdm
+import fitz  # PyMuPDF
+import time
+import os
+
+# 翻译函数
+def translate_text(text):
+    if not text.strip():
+        return text
+    try:
+        return GoogleTranslator(source='auto', target='zh-CN').translate(text)
+    except Exception as e:
+        print("翻译错误:", e)
+        return text
+
+# 上传 PDF 文件
+uploaded = files.upload()
+input_pdf_path = list(uploaded.keys())[0]
+
+# 尝试读取文字，判断是否需要 OCR
+doc = fitz.open(input_pdf_path)
+has_text = any(page.get_text("text").strip() for page in doc)
+
+# 如果没有可选文字，执行 OCR 预处理
+if not has_text:
+    print("⚠️ 原始 PDF 无可选文字，正在执行 OCR 识别...")
+    ocr_output_path = "ocr_output.pdf"
+    !ocrmypdf --skip-text --language eng+nld+chi_sim "{input_pdf_path}" "{ocr_output_path}"
+    pdf_path_to_use = ocr_output_path
+    print("✅ OCR 完成，已生成含文字的 PDF")
+else:
+    print("✅ 检测到可选文字，跳过 OCR")
+    pdf_path_to_use = input_pdf_path
+
+# 重新读取（OCR 后）
+pdf_doc = fitz.open(pdf_path_to_use)
+total_pages = len(pdf_doc)
+translated_doc = Document()
+
+print(f"\n📖 开始翻译共 {total_pages} 页的 PDF 内容...\n")
+
+# 翻译每一页
+for page_num, page in enumerate(tqdm(pdf_doc, desc="📄 翻译中"), start=1):
+    page_header = f"📄 第 {page_num} 页"
+    header_para = translated_doc.add_paragraph()
+    header_run = header_para.add_run(page_header)
+    header_run.font.size = Pt(13)
+    header_run.bold = True
+
+    text = page.get_text("text")
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    for para_text in tqdm(lines, desc=f"↳ 第 {page_num} 页段落翻译", leave=False):
+        translated = translate_text(para_text)
+        time.sleep(0.5)
+        para = translated_doc.add_paragraph()
+        run = para.add_run(translated)
+        run.font.size = Pt(11)
+
+# 保存 Word 文件
+docx_output = "translated_output.docx"
+translated_doc.save(docx_output)
+
+# 转换为 PDF
+!libreoffice --headless --convert-to pdf "{docx_output}" > /dev/null
+
+# 下载 PDF
+pdf_output = "translated_output.pdf"
+print("\n✅ 翻译完成，生成 PDF 文件 ✅")
+files.download(pdf_output)
