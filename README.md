@@ -1,1 +1,1 @@
-colab code for translation with google API, you can copy and paste use in colab
+colab code for translation with google API for any language to Chinese in Doc,PDF and PPT.
